@@ -1,5 +1,6 @@
 const {countTotalperCategory, getAllUrlsFromPage, getMetaDataLanguageAndCopyright, countMatchingKeywordsFromGivenSetOfLinks } = require('./helper_function')
 const puppeteer = require('puppeteer');
+require("dotenv").config();
 //const urlbatch = [];
 
 //console.log(urllist);
@@ -13,9 +14,9 @@ async function wowCat(url) {
 
      console.log(`request recieved for ${url}`);
      const browser = await puppeteer.launch({
-          executablePath : '/opt/render/.cache/puppeteer/chrome/linux-1108766',
+          executablePath : process.env.PUPPETEER_EXECUTABLE_PATH,
           devtools: false,
-          args: ["--no-sandbox", "--disable-setuid-sandbox", "--fast-start", "--disable-extensions"],
+          args: ["--no-sandbox", "--disable-setuid-sandbox", "--single-process", "--no-zygote"],
      });
 
      const dataToReturn = [];
