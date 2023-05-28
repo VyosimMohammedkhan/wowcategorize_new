@@ -13,6 +13,7 @@ async function wowCat(url) {
 
      console.log(`request recieved for ${url}`);
      const browser = await puppeteer.launch({
+          executablePath : '/opt/render/.cache/puppeteer/chrome/linux-1108766',
           devtools: false,
           args: ["--no-sandbox", "--disable-setuid-sandbox", "--fast-start", "--disable-extensions"],
      });
