@@ -1,17 +1,16 @@
 const { MongoClient } = require('mongodb');
 ``
 async function sendDataToMongoDB(data) {
-  const uri = 'mongodb://localhost:27017'; 
-  const dbName = 'wowcategorize'; 
-  const collectionName = 'categories'; 
+ 
   const site = data.metaData.Site;
+  const uri = "mongodb+srv://vyosimmohammedk:Vyosim%402023@wowcategorize.opwfdbe.mongodb.net?retryWrites=true&w=majority";
   const client = new MongoClient(uri);
 
   try {
     await client.connect();
 
-    const db = client.db(dbName);
-    const collection = db.collection(collectionName);
+    const db = client.db('wowcategorize');
+    const collection = db.collection('categories');
 
     const existingData = await collection.findOne({'metaData.Site': site});
 
@@ -33,17 +32,15 @@ async function sendDataToMongoDB(data) {
 }
 
 async function getDataFromMongoDB(Site) {
-  const uri = 'mongodb://localhost:27017'; 
-  const dbName = 'wowcategorize'; 
-  const collectionName = 'categories'; 
-
+  
+  const uri = "mongodb+srv://vyosimmohammedk:Vyosim%402023@wowcategorize.opwfdbe.mongodb.net?retryWrites=true&w=majority";
   const client = new MongoClient(uri);
 
   try {
     await client.connect();
 
-    const db = client.db(dbName);
-    const collection = db.collection(collectionName);
+    const db = client.db('wowcategorize');
+    const collection = db.collection('categories');
 
     // Fetch data from the collection
     const data = await collection.findOne({'metaData.Site':Site});
