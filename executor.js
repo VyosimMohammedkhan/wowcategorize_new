@@ -1,22 +1,20 @@
 const {countTotalperCategory, getAllUrlsFromPage, getMetaDataLanguageAndCopyright, countMatchingKeywordsFromGivenSetOfLinks } = require('./helper_function')
 const puppeteer = require('puppeteer');
-require("dotenv").config();
 //const urlbatch = [];
 
 //console.log(urllist);
 
 //general for single url
 async function wowCat(url) {
-
+console.log(typeof(url))
      if (!url.startsWith("http://") && !url.startsWith("https://")) {
           url = "https://" + url;
      }
 
      console.log(`request recieved for ${url}`);
      const browser = await puppeteer.launch({
-          executablePath : process.env.PUPPETEER_EXECUTABLE_PATH,
           devtools: false,
-          args: ["--no-sandbox", "--disable-setuid-sandbox", "--single-process", "--no-zygote"],
+          args: ["--no-sandbox", "--disable-setuid-sandbox", "--fast-start", "--disable-extensions"],
      });
 
      const dataToReturn = [];
