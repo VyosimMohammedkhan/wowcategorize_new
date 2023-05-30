@@ -19,7 +19,7 @@ async function wowCatBulk(urlbatch) {
 
      const cluster = await Cluster.launch({
           concurrency: Cluster.CONCURRENCY_CONTEXT,
-          maxConcurrency: 8,
+          maxConcurrency: 2,
           puppeteerOptions: {
                args: ["--no-sandbox", "--disable-setuid-sandbox", "--fast-start", "--disable-extensions"],
              }
