@@ -36,22 +36,7 @@ let keywords = require("./services/keywords.json");
 //   });
 // });
 
-async function removeKeyword(category, keywordToRemove) {
-  if (keywords[category].indexOf(keywordToRemove) != -1) {
-    keywords[category].splice(keywords[category].indexOf(keywordToRemove), 1);
-    fs.writeFile("./services/keywords.json", JSON.stringify(keywords), function writeJSON(err) {
-      if (err) return console.log(err);
-      console.log(JSON.stringify(keywords));
-      console.log('writing to keywords');
-    });
-  }
-}
 
-function addKeyword(category, keywordToAdd) {
-  if (keywords[category].indexOf(keywordToAdd) == -1) {
-    keywords[category].push(keywordToAdd);
-  }
-}
 
 async function isPageExclude(page) {
   const content = await page.content();

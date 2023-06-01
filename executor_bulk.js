@@ -109,11 +109,13 @@ async function wowCatBulk(urlbatch) {
                     await setProgress(`failed to navigate to ${url} using https. Will try again with http`)
                     if (url.includes('https')) {
                          cluster.queue(url.replace('https', 'http'));
-                         size++;
-                         await setRemainingTasks(size)
+                         //size++;
+                         
                     } else {
+                         size--;
+                         await setRemainingTasks(size);
                          await setProgress('failed to categorize '+url);
-                         await new ObjectsToCsv([{ url: url, erorr: error.toString() }]).toDisk('./failedUrl.csv', { append: true });
+                         await new ObjectsToCsv([{ url: url.replace('http://', ''), erorr: error.toString() }]).toDisk('./failedUrl.csv', { append: true });
                     }
                }
           } else {

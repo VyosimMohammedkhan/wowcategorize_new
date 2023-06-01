@@ -20,8 +20,13 @@ router.post('/', async function (req, res, next) {
       "Origin, X-Requested-With, Content-Type, Accept"
     );
  
-    let urlListArray = urlList.split(',')
-    console.log(urlListArray);
+    
+    let urlListArray = urlList.split(/\r?\n|\r|\t/);
+    urlListArray= urlListArray.flatMap(line => line.split(/[,|;]/));
+    urlListArray= urlListArray.flatMap(element=>element.trim())
+    urlListArray= urlListArray.flatMap(element=>element.split(' '))
+    urlListArray= urlListArray.filter(element=>element)
+
     const dataArray = await wowCatBulkService(urlListArray);
     res.json(dataArray);
     res.status(200);

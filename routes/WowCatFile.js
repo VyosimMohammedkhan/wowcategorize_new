@@ -20,10 +20,16 @@ const readFileAsPromise = (filePath) => {
 
 const processCSVFile = async (filePath) => {
     try {
-        const data = await readFileAsPromise(filePath);
-        const csvdata = data;
-        const urlList = csvdata.split(',').map((url) => url.trim());
+        const csvdata = await readFileAsPromise(filePath);
+        //const csvdata = data;
+        //const urlList = csvdata.split(',').map((url) => url.trim());
 
+        let urlList = csvdata.split(/\r?\n|\r|\t/);
+        urlList= urlList.flatMap(element => element.split(/[,|;]/));
+        urlList= urlList.flatMap(element=>element.trim())
+        urlList= urlList.flatMap(element=>element.split(' '))
+        urlList= urlList.filter(element=>element)
+        console.log(urlList);
         return urlList;
     } catch (error) {
         console.error('Error reading CSV file:', error);
@@ -58,8 +64,8 @@ router.post('/', async (req, res) => {
 
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.header(
-          "Access-Control-Allow-Headers",
-          "Origin, X-Requested-With, Content-Type, Accept"
+            "Access-Control-Allow-Headers",
+            "Origin, X-Requested-With, Content-Type, Accept"
         );
 
         const dataArray = await wowCatBulkService(urlList);
