@@ -36,50 +36,68 @@ let keywords = require("./services/keywords.json");
 //   });
 // });
 
-async function removeKeyword(category, keywordToRemove){
-if(keywords[category].indexOf(keywordToRemove)!=-1){
-  keywords[category].splice(keywords[category].indexOf(keywordToRemove),1);
-  fs.writeFile("./services/keywords.json", JSON.stringify(keywords), function writeJSON(err) {
-    if (err) return console.log(err);
-    console.log(JSON.stringify(keywords));
-    console.log('writing to keywords');
-  });
-}
+async function removeKeyword(category, keywordToRemove) {
+  if (keywords[category].indexOf(keywordToRemove) != -1) {
+    keywords[category].splice(keywords[category].indexOf(keywordToRemove), 1);
+    fs.writeFile("./services/keywords.json", JSON.stringify(keywords), function writeJSON(err) {
+      if (err) return console.log(err);
+      console.log(JSON.stringify(keywords));
+      console.log('writing to keywords');
+    });
+  }
 }
 
-function addKeyword(category, keywordToAdd){
-  if(keywords[category].indexOf(keywordToAdd)==-1){
+function addKeyword(category, keywordToAdd) {
+  if (keywords[category].indexOf(keywordToAdd) == -1) {
     keywords[category].push(keywordToAdd);
   }
 }
 
+async function isPageExclude(page) {
+  const content = await page.content();
+
+  let isexclude = false;
+  let excludewords = keywords.Exclude;
+ let wordmatched='';
+  for(let word of excludewords) {
+    if (content.includes(word)) {
+      isexclude = true;
+      wordmatched=word;
+      break;
+    }
+  }
+
+  return {exclude: isexclude, wordmatched:wordmatched};
+}
+
+
 async function getAllUrlsFromPage(page) {
-//console.log("started getting all urls from page")
+  //console.log("started getting all urls from page")
   const PageUrlsAndUrlTexts = await page.evaluate(() => {
     const urlHrefAndTextArray = Array.from(document.links).map((link) => [link.href, link.text]);
     const uniqueUrlArray = [...new Set(urlHrefAndTextArray)];
     return urlHrefAndTextArray;
   })
- // console.log("finished getting all urls from page")
+  // console.log("finished getting all urls from page")
   return PageUrlsAndUrlTexts;
 }
 
 async function getMetaDataLanguageAndCopyright(page, url) {
- // console.log("started getting metadata")
+  // console.log("started getting metadata")
   let metanamesLanguage = {};
   let pagemetaNames = await getMetaNames(page);
   let pageLanguage = await getLanguages(page);
 
 
-  metanamesLanguage.Site=url;
+  metanamesLanguage.Site = url;
   for (let [key, value] of Object.entries(pagemetaNames)) {
     metanamesLanguage[`${key}`] = value;
   };
   for (let [key, value] of Object.entries(pageLanguage)) {
     metanamesLanguage[`${key}`] = value;
   };
-  metanamesLanguage.copyright=await getCopyrightText(page);
- // console.log("finished getting metadata")
+  metanamesLanguage.copyright = await getCopyrightText(page);
+  // console.log("finished getting metadata")
   return metanamesLanguage;
 }
 
@@ -90,7 +108,7 @@ async function countMatchingKeywordsFromGivenSetOfLinks(PageUrlsAndUrlTexts, url
   for (const UrlsAndUrlText of PageUrlsAndUrlTexts) {
     try {
       const keywordMatchCountData = await checkKeywordsOnUrl(`${UrlsAndUrlText}`);
-      keywordMatchCountData.Site=url
+      keywordMatchCountData.Site = url
       csvData.push(keywordMatchCountData);
     } catch (error) {
       console.log(`failed to classify ${url}`)
@@ -104,21 +122,21 @@ async function countMatchingKeywordsFromGivenSetOfLinks(PageUrlsAndUrlTexts, url
 
 async function checkKeywordsOnUrl(urlHrefAndTextArray) {
   const urlAndTextArray = urlHrefAndTextArray.split(",");
-  let Categories = { "HREF": urlAndTextArray[0], "linkText": urlAndTextArray[1].replace(/\r?\n|\r/g, ""), "About": "", "Contact": "", "Team": "", "Investor": "", "Product": "", "Career": "", "News": "", "ECommerce": "", "Resources": "", "Pricing": "", "Social": "", "Portal": "", "Legal": "", "Blog": "", "keywordFound":"None"};
+  let Categories = { "HREF": urlAndTextArray[0], "linkText": urlAndTextArray[1].replace(/\r?\n|\r/g, ""), "About": "", "Contact": "", "Team": "", "Investor": "", "Product": "", "Career": "", "News": "", "ECommerce": "", "Resources": "", "Pricing": "", "Social": "", "Portal": "", "Legal": "", "Blog": "", "keywordFound": "None" };
   let keywordsArry = Object.entries(keywords);
-  Categories.linkText=Categories.linkText.replace(/\s+/g, ' ').trim();
+  Categories.linkText = Categories.linkText.replace(/\s+/g, ' ').trim();
   for (let [category, keywordset] of keywordsArry) {
     const word = category.toString()
     // let count=Categories[`${word}`];
     for (let keyword of keywordset) {
       if (Categories.HREF.toLowerCase().includes(keyword.toLowerCase()) || Categories.linkText.toLowerCase().includes(keyword.toLowerCase())) {
         Categories[`${word}`] = 1;
-        if(Categories.keywordFound=="None"){
-          Categories.keywordFound=keyword;
-        }else{
-          Categories.keywordFound=Categories.keywordFound+", "+keyword;
+        if (Categories.keywordFound == "None") {
+          Categories.keywordFound = keyword;
+        } else {
+          Categories.keywordFound = Categories.keywordFound + ", " + keyword;
         }
-        
+
       }
     }
   }
@@ -196,11 +214,11 @@ async function getCopyrightText(page) {
   const elementsWithSymbol = await page.$x("//*[contains(text(), '©')]");
   if (elementsWithSymbol.length > 0) {
     const textContent = await page.evaluate(element => element.textContent, elementsWithSymbol[0]);
-    corrections={
-      [/\s+/g]:" ",
-      [/\r?\n|\r/g]:""
+    corrections = {
+      [/\s+/g]: " ",
+      [/\r?\n|\r/g]: ""
     }
-     return textContent.replace([/\s+/g]|[/\r?\n|\r/g], matched => corrections[matched]);
+    return textContent.replace([/\s+/g] | [/\r?\n|\r/g], matched => corrections[matched]);
   } else {
     return "NOT FOUND!";
   }
@@ -208,41 +226,99 @@ async function getCopyrightText(page) {
 }
 
 
-function countTotalperCategory(data){
-let countArray={ "About": 0, "Contact": 0, "Team": 0, "Investor": 0, "Product": 0, "Career": 0, "News": 0, "ECommerce": 0,
- "Resources": 0, "Pricing": 0, "Social": 0, "Portal": 0, "Legal": 0, "Blog": 0};
-  
-data.forEach((webpage)=>{
-webpage.About==1? countArray.About++:null;
-webpage.Contact==1? countArray.Contact++:null;
-webpage.Team==1? countArray.Team++:null;
-webpage.Investor==1? countArray.Investor++:null;
-webpage.Product==1? countArray.Product++:null;
-webpage.Career==1? countArray.Career++:null;
-webpage.News==1? countArray.News++:null;
-webpage.ECommerce==1? countArray.ECommerce++:null;
-webpage.Resources==1? countArray.Resources++:null;
-webpage.Pricing==1? countArray.Pricing++:null;
-webpage.Social==1? countArray.Social++:null;
-webpage.Portal==1? countArray.Portal++:null;
-webpage.Legal==1? countArray.Legal++:null;
-webpage.Blog==1? countArray.Blog++:null;
-})
+function countTotalperCategory(data) {
+  let countArray = {
+    "About": 0, "Contact": 0, "Team": 0, "Investor": 0, "Product": 0, "Career": 0, "News": 0, "ECommerce": 0,
+    "Resources": 0, "Pricing": 0, "Social": 0, "Portal": 0, "Legal": 0, "Blog": 0, "Exclude": 0
+  };
+
+  data.forEach((webpage) => {
+    webpage.About == 1 ? countArray.About++ : null;
+    webpage.Contact == 1 ? countArray.Contact++ : null;
+    webpage.Team == 1 ? countArray.Team++ : null;
+    webpage.Investor == 1 ? countArray.Investor++ : null;
+    webpage.Product == 1 ? countArray.Product++ : null;
+    webpage.Career == 1 ? countArray.Career++ : null;
+    webpage.News == 1 ? countArray.News++ : null;
+    webpage.ECommerce == 1 ? countArray.ECommerce++ : null;
+    webpage.Resources == 1 ? countArray.Resources++ : null;
+    webpage.Pricing == 1 ? countArray.Pricing++ : null;
+    webpage.Social == 1 ? countArray.Social++ : null;
+    webpage.Portal == 1 ? countArray.Portal++ : null;
+    webpage.Legal == 1 ? countArray.Legal++ : null;
+    webpage.Blog == 1 ? countArray.Blog++ : null;
+  })
 
 
-return countArray;
+  return countArray;
 }
 
 //not useful anymore
 function divideArrayIntoFiveSmallerArrays(largeArray) {
   let sizeOfSmallerArrays = Math.ceil(largeArray.length / 5);
   let newDividedArray = []
-  for (let i = 0; i <5; i++) {
+  for (let i = 0; i < 5; i++) {
     newDividedArray.push(largeArray.splice(0, sizeOfSmallerArrays));
   }
   return newDividedArray;
 }
 
+function sendExcludeData(site, wordmatched){
+ return [
+  [{ 
+    "HREF": "", 
+    "linkText": "", 
+    "About": "", 
+    "Contact": "", 
+    "Team": "", 
+    "Investor": "", 
+    "Product": "", 
+    "Career": "", 
+    "News": "", 
+    "ECommerce": "", 
+    "Resources": "", 
+    "Pricing": "", 
+    "Social": "", 
+    "Portal": "", 
+    "Legal": "", 
+    "Blog": "", 
+    "keywordFound": wordmatched}],{
+    About: 0,
+    Contact: 0,
+    Team: 0,
+    Investor: 0,
+    Product: 0,
+    Career: 0,
+    News: 0,
+    ECommerce: 0,
+    Resources: 0,
+    Pricing: 0,
+    Social: 0,
+    Portal: 0,
+    Legal: 0,
+    Blog: 0,
+    Exclude:1
+  },
+  {
+    Site: site,
+    metaTitleContent: '',
+    metaContenType: '',
+    metaKeywords: '',
+    metaDescription: '',
+    metaOgTitle: '',
+    metaOgDescription: '',
+    metaOgUrl: '',
+    metaOgSitename: '',
+    metaProfileUsername: '',
+    metaProfileFirstname: '',
+    metaprofileLastname: '',
+    languageCharSet: '',
+    contentLanguage: '',
+    languageLocale: '',
+    languageHtmtlLang: '',
+    copyright: ''
+  }]
+}
 
 
-module.exports = { divideArrayIntoFiveSmallerArrays, countTotalperCategory,getMetaDataLanguageAndCopyright, getAllUrlsFromPage, countMatchingKeywordsFromGivenSetOfLinks, getMetaNames, getLanguages, getCopyrightText }
+module.exports = {sendExcludeData, isPageExclude,divideArrayIntoFiveSmallerArrays, countTotalperCategory, getMetaDataLanguageAndCopyright, getAllUrlsFromPage, countMatchingKeywordsFromGivenSetOfLinks, getMetaNames, getLanguages, getCopyrightText }

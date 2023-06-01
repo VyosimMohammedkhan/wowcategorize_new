@@ -1,5 +1,5 @@
 //const db = require('./db');
-const wowCat = require('../executor');
+const {wowCat} = require('../executor');
 const config = require('../config');
 //const {sendDataToMongoDB} = require('./db')
 
