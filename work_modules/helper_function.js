@@ -1,91 +1,155 @@
 const puppeteer = require('puppeteer');
-let keywords = require("./services/keywords.json");
-//const fs = require('fs')
-//  let keywords = {
-//   "About": ["About", "Company", "Enterprise", "Corporate", "History", "Values", "Mission", "Vision", "Story", "What we do", "Who we are", "Who we serve","Firm", "Profile"],
-//   "Contact": ["Contact", "Office", "Location", "Map", "Direction", "Get in touch", "Submit", "Send", "Form", "Consult", "Consultation", "Free", "Appointment", "Request"],
-//   "Team": ["Management", "Leadership", "Leaders", "Founder", "Staff", "People", "Meet", "Partner", "Board", "Committee", "Trustee", "President", "Owner", "Director", "Chair"],
-//   "Investor": ["Investor"],
-//   "Product": ["Product", "Service", "Solution", "Compare", "Demo", "Feature", "Portfolio", "Featured", "Practice", "Area", "Project"],
-//   "Career": ["Career", "Jobs", "Hiring", "Employment"],
-//   "News": ["News", "Press", "Newsroom", "Awards", "Press kit"],//temporarily removed keyword "PR"
-//   "ECommerce": ["E-Commerce", "Cart", "Store", "Shop"],
-//   "Resources": ["Resources", "Support", "Download", "Chat", "Schedule", "Developers", "FAQ", "Tour", "Help", "Webinar", "Community", "Marketplace", "Feedback", "Knowledge"],
-//   "Pricing": ["Pricing", "Offer", "Special", "Deal"],
-//   "Social": ["Social", "Facebook,", "Twitter", "Instagram", "Youtube", "LinkedIn", "RSS", "Feed", "Houzz", "Pinterest"],
-//   "Portal": ["Portal", "Login", "Sign in", "Sign up", "Cart", "Subscribe", "Log in", "Register", "Stay in touch"],
-//   "Legal": ["Legal", "Privacy", "Terms", "Disclaimer"],
-//   "Blog": ["Articles", "Customer Stories", "Testimonials", "Reviews", "Newsletter", "Gallery", "Photo", "Guide", "Case Studies", "White Papers", "Client", "Event"],
-//   "Exclude": ["Page Not found", "lorem ipsum", "domain for sale", "parked for free"]
-// };
+let keywords = require("./keywords.json");
+const cheerio = require('cheerio');
 
-// fs.watchFile('./services/keywords.json', () => {
-//   // Re-read the keywords.json file
-//   fs.readFile('./services/keywords.json', 'utf8', (err, data) => {
-//     if (err) {
-//       console.error('Error reading keywords.json file:', err);
-//     } else {
-//       try {
-//         // Update the keywords variable with the new contents
-//         keywords = JSON.parse(data);
-//         console.log('Keywords updated');
-//       } catch (error) {
-//         console.error('Error parsing keywords.json data:', error);
-//       }
-//     }
-//   });
-// });
+let progress = 'loading ... '
+async function setProgress(p) {
+  progress = p;
+}
+async function getProgress() {
+  return progress;
+}
 
+function addhttps(url) {
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    return "https://" + url;
+  }
+  return url = url.trim();
+}
 
+async function crawler(url, ws) {
+  console.log('got request for ' + url)
+
+  let data = {};
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    devtools: false,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--fast-start", "--disable-extensions"],
+  });
+  try {
+
+    const page = await browser.newPage();
+    page.setDefaultTimeout(60 * 1000)
+    page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4182.0 Safari/537.36");
+
+    ws.send(JSON.stringify({ message: 'Opening newpage ...' }));
+    let isPageLoaded = await naviateToUrl(page, url)
+
+    if (isPageLoaded.UrlWorking) {
+      let excludePage = await isPageExclude(page);
+      if (!excludePage.exclude) {
+
+        ws.send(JSON.stringify({ message: "getting url List from page ..." }));
+        let urlList = await getAllUrlsFromPage(page);
+        ws.send(JSON.stringify({ message: "getting metaData from page ..." }));
+        let metaData = await getMetaDataLanguageAndCopyright(page, url);
+        data.urlList = urlList;
+        data.metaData = metaData;
+      } else {
+        ws.send(JSON.stringify({ message: "page contains exclude keywords ..." }));
+
+        data = ExcludeData(url, excludePage.wordmatched)
+      }
+      ws.send(JSON.stringify({ message: "completed crawling page ..." }));
+
+    } else {
+      data = { 'Site': url, 'error': isPageLoaded.errorMessage };
+    }
+  } catch (err) {
+    console.log(err.message)
+    data = { 'Site': url, 'error': isPageLoaded.errorMessage };
+  } finally {
+    await browser.close();
+    return data;
+  }
+}
+
+async function naviateToUrl(page, url) {
+  let UrlWorking = true;
+  let errorMessage = '';
+  try {
+    await page.goto(url, {
+      networkIdleTimeout: 5000,
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    })
+  } catch {
+    try {
+      url = url.replace('https', 'http');
+      await page.goto(url, {
+        networkIdleTimeout: 5000,
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+      })
+    } catch (error) {
+      UrlWorking = false;
+      errorMessage = error.message;
+      console.log(errorMessage)
+    }
+  }
+  return { UrlWorking, errorMessage };
+}
 
 async function isPageExclude(page) {
   const content = await page.content();
-
   let isexclude = false;
   let excludewords = keywords.Exclude;
- let wordmatched='';
-  for(let word of excludewords) {
+  let wordmatched = '';
+  for (let word of excludewords) {
     if (content.includes(word)) {
       isexclude = true;
-      wordmatched=word;
+      wordmatched = word;
       break;
     }
   }
 
-  return {exclude: isexclude, wordmatched:wordmatched};
+  return { exclude: isexclude, wordmatched: wordmatched };
 }
-
 
 async function getAllUrlsFromPage(page) {
   //console.log("started getting all urls from page")
   const PageUrlsAndUrlTexts = await page.evaluate(() => {
     const urlHrefAndTextArray = Array.from(document.links).map((link) => [link.href, link.text]);
-    const uniqueUrlArray = [...new Set(urlHrefAndTextArray)];
-    return urlHrefAndTextArray;
+    const uniqueMap = new Map();
+    for (const [href, text] of urlHrefAndTextArray) {
+      const key = `${href} - ${text}`;
+      uniqueMap.set(key, [href, text]);
+    }
+    const uniqueUrls = Array.from(uniqueMap.values());
+
+    return uniqueUrls;
   })
   // console.log("finished getting all urls from page")
   return PageUrlsAndUrlTexts;
 }
 
 async function getMetaDataLanguageAndCopyright(page, url) {
-  // console.log("started getting metadata")
+  console.log("started getting metadata")
   let metanamesLanguage = {};
+  console.log("started getting metanames")
   let pagemetaNames = await getMetaNames(page);
+  console.log("got metanames")
   let pageLanguage = await getLanguages(page);
-
-
+  console.log("got metaLanguages")
   metanamesLanguage.Site = url;
+  console.log("set Site property")
   for (let [key, value] of Object.entries(pagemetaNames)) {
     metanamesLanguage[`${key}`] = value;
   };
   for (let [key, value] of Object.entries(pageLanguage)) {
     metanamesLanguage[`${key}`] = value;
   };
-  metanamesLanguage.copyright = await getCopyrightText(page);
+
+  try {// to handle the issue with sites like https://bayareawindowpros.com/ that give weird error while getting copyright
+    metanamesLanguage.copyright = await getCopyrightText(page);
+  } catch {
+    metanamesLanguage.copyright = "Not Found!"
+  }
+
   // console.log("finished getting metadata")
   return metanamesLanguage;
 }
-
 
 async function countMatchingKeywordsFromGivenSetOfLinks(PageUrlsAndUrlTexts, url) {
 
@@ -103,7 +167,6 @@ async function countMatchingKeywordsFromGivenSetOfLinks(PageUrlsAndUrlTexts, url
   }
   return csvData;
 }
-
 
 async function checkKeywordsOnUrl(urlHrefAndTextArray) {
   const urlAndTextArray = urlHrefAndTextArray.split(",");
@@ -131,8 +194,9 @@ async function checkKeywordsOnUrl(urlHrefAndTextArray) {
 async function getMetaNames(page) {
 
   let getMetaData = await page.evaluate(() => {
-    let metaDataMap = new Map();
-
+    console.log('creating map')
+    let metaDataMap = {};
+    console.log('created map')
     let titleContent = document.title;
     metaDataMap.metaTitleContent = titleContent ? titleContent : null;
 
@@ -174,7 +238,7 @@ async function getMetaNames(page) {
 async function getLanguages(page) {
 
   let getLanguagesData = await page.evaluate(() => {
-    let languageDataMap = new Map();
+    let languageDataMap = {}
 
     let charSet = document.querySelector('meta[charset=""]')
     languageDataMap.languageCharSet = charSet ? charSet.getAttribute('charset') : null;
@@ -193,22 +257,42 @@ async function getLanguages(page) {
   return getLanguagesData;
 }
 
-
 async function getCopyrightText(page) {
-
-  const elementsWithSymbol = await page.$x("//*[contains(text(), '©')]");
+  console.log('inside copyright method');
+  let elementsWithSymbol = await page.$x("//*[contains(text(), '©')]");
   if (elementsWithSymbol.length > 0) {
-    const textContent = await page.evaluate(element => element.textContent, elementsWithSymbol[0]);
+    let textContent = await page.evaluate(element => element.textContent, elementsWithSymbol[0]);
     corrections = {
       [/\s+/g]: " ",
       [/\r?\n|\r/g]: ""
     }
-    return textContent.replace([/\s+/g] | [/\r?\n|\r/g], matched => corrections[matched]);
+    textContent = textContent.replace([/\s+/g] | [/\r?\n|\r/g], matched => corrections[matched]);
+    textContent = copyrightFormatter(textContent);
+    return textContent.replace('undefined', '0');
   } else {
     return "NOT FOUND!";
   }
-
 }
+
+
+
+
+function copyrightFormatter(inputText) {
+
+  const $ = cheerio.load(inputText);
+  let extractedText = '';
+
+  $('body').contents().each(function () {
+    const text = $(this).text();
+    console.log(text)
+    if (text.includes('©')) {
+      extractedText = text;
+      return false;
+    }
+  });
+  return extractedText;
+}
+
 
 
 function countTotalperCategory(data) {
@@ -233,77 +317,76 @@ function countTotalperCategory(data) {
     webpage.Legal == 1 ? countArray.Legal++ : null;
     webpage.Blog == 1 ? countArray.Blog++ : null;
   })
-
-
   return countArray;
 }
 
-//not useful anymore
-function divideArrayIntoFiveSmallerArrays(largeArray) {
-  let sizeOfSmallerArrays = Math.ceil(largeArray.length / 5);
-  let newDividedArray = []
-  for (let i = 0; i < 5; i++) {
-    newDividedArray.push(largeArray.splice(0, sizeOfSmallerArrays));
+function ExcludeData(site, wordmatched) {
+  return {
+    id: '',
+    url: site,
+    categoryData: [{
+      HREF: "",
+      linkText: "",
+      About: "",
+      Contact: "",
+      Team: "",
+      Investor: "",
+      Product: "",
+      Career: "",
+      News: "",
+      ECommerce: "",
+      Resources: "",
+      Pricing: "",
+      Social: "",
+      Portal: "",
+      Legal: "",
+      Blog: "",
+      keywordFound: wordmatched
+    }],
+    totalCount: {
+      About: 0,
+      Contact: 0,
+      Team: 0,
+      Investor: 0,
+      Product: 0,
+      Career: 0,
+      News: 0,
+      ECommerce: 0,
+      Resources: 0,
+      Pricing: 0,
+      Social: 0,
+      Portal: 0,
+      Legal: 0,
+      Blog: 0,
+      Exclude: 1
+    },
+    metaData: {
+      Site: site,
+      metaTitleContent: '',
+      metaContenType: '',
+      metaKeywords: '',
+      metaDescription: '',
+      metaOgTitle: '',
+      metaOgDescription: '',
+      metaOgUrl: '',
+      metaOgSitename: '',
+      metaProfileUsername: '',
+      metaProfileFirstname: '',
+      metaprofileLastname: '',
+      languageCharSet: '',
+      contentLanguage: '',
+      languageLocale: '',
+      languageHtmtlLang: '',
+      copyright: ''
+    }
   }
-  return newDividedArray;
 }
 
-function sendExcludeData(site, wordmatched){
- return [
-  [{ 
-    "HREF": "", 
-    "linkText": "", 
-    "About": "", 
-    "Contact": "", 
-    "Team": "", 
-    "Investor": "", 
-    "Product": "", 
-    "Career": "", 
-    "News": "", 
-    "ECommerce": "", 
-    "Resources": "", 
-    "Pricing": "", 
-    "Social": "", 
-    "Portal": "", 
-    "Legal": "", 
-    "Blog": "", 
-    "keywordFound": wordmatched}],{
-    About: 0,
-    Contact: 0,
-    Team: 0,
-    Investor: 0,
-    Product: 0,
-    Career: 0,
-    News: 0,
-    ECommerce: 0,
-    Resources: 0,
-    Pricing: 0,
-    Social: 0,
-    Portal: 0,
-    Legal: 0,
-    Blog: 0,
-    Exclude:1
-  },
-  {
-    Site: site,
-    metaTitleContent: '',
-    metaContenType: '',
-    metaKeywords: '',
-    metaDescription: '',
-    metaOgTitle: '',
-    metaOgDescription: '',
-    metaOgUrl: '',
-    metaOgSitename: '',
-    metaProfileUsername: '',
-    metaProfileFirstname: '',
-    metaprofileLastname: '',
-    languageCharSet: '',
-    contentLanguage: '',
-    languageLocale: '',
-    languageHtmtlLang: '',
-    copyright: ''
-  }]
+function createExcludeData(url, excludePage) {
+  let excludeData = ExcludeData(url, excludePage.wordmatched);
+  // let dataObject;
+  // dataObject[url] = excludeData;
+  return excludeData;
 }
 
-
-module.exports = {sendExcludeData, isPageExclude,divideArrayIntoFiveSmallerArrays, countTotalperCategory, getMetaDataLanguageAndCopyright, getAllUrlsFromPage, countMatchingKeywordsFromGivenSetOfLinks, getMetaNames, getLanguages, getCopyrightText }
+module.exports = { createExcludeData, getProgress, setProgress, addhttps, crawler, ExcludeData, isPageExclude, countTotalperCategory, getMetaDataLanguageAndCopyright, getAllUrlsFromPage, countMatchingKeywordsFromGivenSetOfLinks, getMetaNames, getLanguages, getCopyrightText }

@@ -1,40 +1,30 @@
 const express = require("express");
 const app = express();
 const cors = require('cors');
+const expressWs = require('express-ws')(app);
 const PORT =process.env.PORT || 5000;
-const wowCat = require("./routes/WowCat");
+const categorize = require("./routes/categorize");
 const getkeywords =require("./routes/keywordsService")
-const Bulkategorize = require("./routes/WowCatBulk")
-const BulkFile = require("./routes/WowCatFile")
+const categorizeBulk = require("./routes/categorizeBulk")
 const dbData = require("./routes/dbData")
-const ProgressStatus = require('./routes/statusupdate')
-const progressPerUrl = require('./routes/progressPerUrl')
-const mainPageProgress = require('./routes/progressForMainPage')
+const bodyParser = require('body-parser');
+
 
 app.use(cors());
-app.use(express.json());
-app.use(
-  express.urlencoded({
-    extended: true,
-  })
-);
-
-app.get("/", (req, res) => {
-  res.json({ message: "ok" });
-});
-
-
+app.use(express.json({limit: "10mb", extended: true}))
+app.use(express.urlencoded({limit: "10mb", extended: true, parameterLimit: 50000}))
+const bodyParserConfig = {
+  json: { limit: '10mb', extended: true },
+  urlencoded: { limit: '10mb', extended: true }
+};
+app.use(bodyParser.json(bodyParserConfig.json));
+app.use(bodyParser.urlencoded(bodyParserConfig.urlencoded));
 
 app.use("/keywords", getkeywords)
-app.use("/wowCat", wowCat);
-app.use("/bulkCategorize", Bulkategorize)
-app.use("/file", BulkFile)
-app.use("/dbData",dbData )
-app.use("/status", ProgressStatus)
-app.use("/progress", progressPerUrl)
-app.use("/mainPageProgress", mainPageProgress)
+//app.use("/categorize", categorize);// crawl single url
+app.use("/categorizeBulk", categorizeBulk)// crawl multiple urls
+app.use("/dbData",dbData )//getting and updating crawled urls from database
 
 app.listen(PORT, () => {
   console.log(`listening on port ${PORT}`)
 })
-
